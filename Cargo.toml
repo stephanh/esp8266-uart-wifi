@@ -1,0 +1,15 @@
+[package]
+name = "esp01"
+version = "0.1.0"
+authors = ["stephanh <stephanh@users.noreply.github.com>"]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+embedded-hal = "0.2"
+nb = "0.1"
+
+[dev-dependencies]
+embedded-hal-mock = "0.7"
+embedded-hal = "0.2"
+serial = "0.4"
