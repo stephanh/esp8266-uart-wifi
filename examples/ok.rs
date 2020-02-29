@@ -1,6 +1,4 @@
-use core::fmt::Write;
-
-use std::io::{ErrorKind, Read, Write as IOWrite};
+use std::io::{ErrorKind, Read, Write};
 use std::time::Duration;
 use std::{env, str};
 
@@ -11,10 +9,12 @@ use nb;
 use embedded_hal as hal;
 
 use esp01::esp01;
+use esp01::Mode::*;
+use esp01::Persist::*;
 
-pub struct Serial<T: Read + IOWrite>(pub T);
+pub struct Serial<T: Read + Write>(pub T);
 
-impl<T: Read + IOWrite> hal::serial::Read<u8> for Serial<T> {
+impl<T: Read + Write> hal::serial::Read<u8> for Serial<T> {
     type Error = ErrorKind;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
@@ -38,7 +38,7 @@ fn translate_io_errors(err: std::io::Error) -> nb::Error<ErrorKind> {
     }
 }
 
-impl<T: Read + IOWrite> hal::serial::Write<u8> for Serial<T> {
+impl<T: Read + Write> hal::serial::Write<u8> for Serial<T> {
     type Error = ErrorKind;
 
     fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
@@ -51,7 +51,7 @@ impl<T: Read + IOWrite> hal::serial::Write<u8> for Serial<T> {
     }
 }
 
-impl<T: Read + IOWrite> core::fmt::Write for Serial<T> {
+impl<T: Read + Write> core::fmt::Write for Serial<T> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         use embedded_hal::serial::Write;
         let _ = s
@@ -89,6 +89,9 @@ fn main() -> Result<(), ErrorKind> {
     let mut s = Serial(port);
     let mut esp01 = esp01(s);
     let r = esp01.get_version()?;
+    println!("{}", str::from_utf8(r).unwrap());
+
+    let r = esp01.set_mode(StationMode, DontSave)?;
     println!("{}", str::from_utf8(r).unwrap());
 
     Ok(())
