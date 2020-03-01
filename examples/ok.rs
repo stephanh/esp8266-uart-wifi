@@ -8,9 +8,11 @@ use nb;
 
 use embedded_hal as hal;
 
+use esp01::errors::EResult;
 use esp01::esp01;
 use esp01::Mode::*;
 use esp01::Persist::*;
+use esp01::QueryMode::*;
 
 pub struct Serial<T: Read + Write>(pub T);
 
@@ -63,7 +65,7 @@ impl<T: Read + Write> core::fmt::Write for Serial<T> {
     }
 }
 
-fn main() -> Result<(), ErrorKind> {
+fn main() -> EResult<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("Usage: {} <path-to-serial>", args[0]);
@@ -86,12 +88,20 @@ fn main() -> Result<(), ErrorKind> {
     port.set_timeout(Duration::from_secs(1))
         .expect("Could not set serial port timeout");
 
-    let mut s = Serial(port);
+    let s = Serial(port);
     let mut esp01 = esp01(s);
     let r = esp01.get_version()?;
+    println!("{:?}", r);
     println!("{}", str::from_utf8(r).unwrap());
 
-    let r = esp01.set_mode(StationMode, DontSave)?;
+    let esp01 = esp01.set_mode(StationMode, DontSave)?;
+    //println!("{}", str::from_utf8(r).unwrap());
+
+    //println!("{}", str::from_utf8(r).unwrap());
+
+    //esp01.autoconnect_ap(true)?;
+    //println!("{}", str::from_utf8(r).unwrap());
+    let r = esp01.get_station_mac(Current)?;
     println!("{}", str::from_utf8(r).unwrap());
 
     Ok(())
