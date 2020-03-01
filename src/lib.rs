@@ -65,8 +65,8 @@ pub enum QueryMode {
 impl QueryMode {
     pub fn as_str(&self) -> &'static str {
         match self {
-            QueryMode::Current => "_CUR?",
-            QueryMode::SavedInFlash => "_DEF?",
+            QueryMode::Current => "_CUR",
+            QueryMode::SavedInFlash => "_DEF",
         }
     }
 }
@@ -96,47 +96,12 @@ where
         block!(self.serial.read()).map_err(|_| Error::SerialRead)
     }
 
-    /// Sends a command
-    fn send_command(&mut self, command: &[&str]) -> EResult<()> {
-        for b in AT.iter() {
-            self.write_byte(*b)?;
-        }
-        for part in command {
-            for b in part.as_bytes() {
-                self.write_byte(*b)?;
-            }
-        }
+    /// Writes line end sequence
+    fn write_line_end(&mut self) -> EResult<()> {
         self.write_byte(CR)?;
-        self.write_byte(LF)?;
-
-        self.read_command_back(command)
+        self.write_byte(LF)
     }
 
-    /// Reads a byte and checks that it is the expected byte
-    fn read_byte_back(&mut self, byte: u8) -> EResult<()> {
-        if self.read_byte()? == byte {
-            Ok(())
-        } else {
-            Err(Error::CommandReadFail)
-        }
-    }
-
-    fn read_command_back(&mut self, command: &[&str]) -> EResult<()> {
-        for b in AT.iter() {
-            self.read_byte_back(*b)?;
-        }
-        for part in command {
-            for b in part.as_bytes() {
-                self.read_byte_back(*b)?;
-            }
-        }
-
-        self.read_byte_back(CR)?;
-        self.read_byte_back(CR)?;
-        self.read_byte_back(LF)
-    }
-
-    // TODO: Handle reading FAIL and ERROR as well
     /// Reads the response for a command
     pub fn read_response(&mut self) -> EResult<&[u8]> {
         let mut i = 0;
@@ -164,6 +129,72 @@ where
         }
 
         Ok(&self.read_buf[0..i])
+    }
+
+    /// Reads a byte and checks that it is the expected byte
+    fn read_byte_back(&mut self, byte: u8) -> EResult<()> {
+        if self.read_byte()? == byte {
+            Ok(())
+        } else {
+            Err(Error::CommandReadFail)
+        }
+    }
+
+    /// Checks that the response starts with the command that was sent
+    fn read_command_back(&mut self, command: &[&str], query: bool) -> EResult<()> {
+        for b in AT.iter() {
+            self.read_byte_back(*b)?;
+        }
+        for part in command {
+            for b in part.as_bytes() {
+                self.read_byte_back(*b)?;
+            }
+        }
+        if query {
+            self.read_byte_back(b'?')?;
+        }
+
+        self.read_byte_back(CR)?;
+        self.read_byte_back(CR)?;
+        self.read_byte_back(LF)
+    }
+
+    /// Sends a command
+    fn send_command(&mut self, command: &[&str]) -> EResult<()> {
+        for b in AT.iter() {
+            self.write_byte(*b)?;
+        }
+        for part in command {
+            for b in part.as_bytes() {
+                self.write_byte(*b)?;
+            }
+        }
+        self.write_line_end()?;
+
+        self.read_command_back(command, false)
+    }
+
+    /// Sends a query
+    fn send_query(&mut self, command: &[&str]) -> EResult<&[u8]> {
+        for b in AT.iter() {
+            self.write_byte(*b)?;
+        }
+        for part in command {
+            for b in part.as_bytes() {
+                self.write_byte(*b)?;
+            }
+        }
+        self.write_byte(b'?')?;
+        self.write_line_end()?;
+        self.read_command_back(command, true)?;
+        self.read_byte_back(b'+')?;
+        for part in command {
+            for b in part.as_bytes() {
+                self.read_byte_back(*b)?;
+            }
+        }
+        self.read_byte_back(b':')?;
+        self.read_response()
     }
 
     /// Gets ESP01 version information
@@ -202,8 +233,8 @@ where
 
     /// Gets the MAC address for the station
     pub fn get_station_mac(&mut self, query_mode: QueryMode) -> EResult<&[u8]> {
-        self.send_command(&["CIPSTAMAC", query_mode.as_str()])?;
-        self.read_response()
+        let r = self.send_query(&["CIPSTAMAC", query_mode.as_str()])?;
+        Ok(&r[1..(r.len() - 1)])
     }
 }
 
