@@ -1,4 +1,4 @@
-#![no_std]
+//#![no_std]
 
 pub mod errors;
 
@@ -10,6 +10,8 @@ use nb::block;
 
 use crate::errors::EResult;
 use crate::errors::Error;
+
+pub mod atat;
 
 const CR: u8 = b'\r';
 const LF: u8 = b'\n';
@@ -38,8 +40,13 @@ pub struct StationMode<MODE> {
     _mode: PhantomData<MODE>,
 }
 
-pub struct APConnected {}
+pub struct APConnected<LINK> {
+    _mode: PhantomData<LINK>,
+}
 pub struct APDisconnected {}
+
+pub struct LinkConnected {}
+pub struct LinkDisconnected {}
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum Persist {
@@ -67,6 +74,23 @@ impl QueryMode {
         match self {
             QueryMode::Current => "_CUR",
             QueryMode::SavedInFlash => "_DEF",
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum ConnectionMode {
+    UDP,
+    TCP,
+    SSL,
+}
+
+impl ConnectionMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConnectionMode::UDP => "UDP",
+            ConnectionMode::TCP => "TCP",
+            ConnectionMode::SSL => "SSL",
         }
     }
 }
@@ -249,7 +273,7 @@ where
         ssid: &str,
         password: &str,
         persist: Persist,
-    ) -> EResult<Esp01<S, StationMode<APConnected>>> {
+    ) -> EResult<Esp01<S, StationMode<APConnected<LinkDisconnected>>>> {
         self.send_command(&[
             "CWJAP",
             persist.as_str(),
@@ -269,7 +293,7 @@ where
     }
 }
 
-impl<S, E> Esp01<S, StationMode<APConnected>>
+impl<S, L, E> Esp01<S, StationMode<APConnected<L>>>
 where
     S: Read<u8, Error = E> + Write<u8, Error = E>,
 {
@@ -295,6 +319,49 @@ where
 
         self.send_command(&["CWAUTOCONN=", param])?;
         self.read_response()?;
+
+        Ok(())
+    }
+}
+
+impl<S, E> Esp01<S, StationMode<APConnected<LinkDisconnected>>>
+where
+    S: Read<u8, Error = E> + Write<u8, Error = E>,
+{
+    /// Connects to an endpoint
+    pub fn connect(
+        mut self,
+        connection_mode: ConnectionMode,
+        ip: &str,
+        port: &str,
+    ) -> EResult<Esp01<S, StationMode<APConnected<LinkConnected>>>> {
+        self.send_command(&[
+            "CIPSTART=",
+            "\"",
+            connection_mode.as_str(),
+            "\",\"",
+            ip,
+            "\",",
+            port,
+        ])?;
+
+        self.read_response()?;
+        Ok(Esp01 {
+            serial: self.serial,
+            read_buf: self.read_buf,
+            _mode: PhantomData,
+        })
+    }
+}
+
+impl<S, E> Esp01<S, StationMode<APConnected<LinkConnected>>>
+where
+    S: Read<u8, Error = E> + Write<u8, Error = E>,
+{
+    /// Sends data over the connection
+    pub fn send(&mut self, data: &[u8]) -> EResult<()> {
+        self.send_command(&["CIPSEND="])?;
+        //write!(self.serial, "{}", data.len());
 
         Ok(())
     }

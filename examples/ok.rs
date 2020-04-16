@@ -10,6 +10,7 @@ use embedded_hal as hal;
 
 use esp01::errors::EResult;
 use esp01::esp01;
+use esp01::ConnectionMode::*;
 use esp01::Mode::*;
 use esp01::Persist::*;
 use esp01::QueryMode::*;
@@ -97,12 +98,15 @@ fn main() -> EResult<()> {
     let esp01 = esp01.set_mode(StationMode, DontSave)?;
     //println!("{}", str::from_utf8(r).unwrap());
 
+    let mut esp01 = esp01.connect_ap("uap_revived", "uberandpipsnetwork", DontSave)?;
     //println!("{}", str::from_utf8(r).unwrap());
 
     //esp01.autoconnect_ap(true)?;
     //println!("{}", str::from_utf8(r).unwrap());
     let r = esp01.get_station_mac(Current)?;
     println!("{}", str::from_utf8(r).unwrap());
+
+    let r = esp01.connect(TCP, "10.0.0.4", "8000")?;
 
     Ok(())
 
